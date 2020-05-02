@@ -1,6 +1,7 @@
 var mysql = require("mysql");
 var inquirer = require("inquirer");
 const cTable = require("console.table");
+//const queryAsync = util.promisify(connection.query).bind(connection);
 
 // create the connection information for the sql database
 var connection = mysql.createConnection({
@@ -126,7 +127,6 @@ function viewAllEmployees() {
 
 async function deleteEmployee() {
   const employeeList = await getEmployeeData();
-  //console.log(employeeList);
   const results = await inquirer.prompt([
     {
       name: "employee_name",
@@ -192,6 +192,26 @@ async function viewAllEmployeesByManager() {
       }, 1000);
     }
   );
+}
+
+async function viewDepartments() {
+  connection.query("SELECT * from department", function (err, res) {
+    if (err) throw err;
+    console.table(res);
+    setTimeout(function () {
+      init();
+    }, 1000);
+  });
+}
+
+async function viewRoles() {
+  connection.query("SELECT * from role", function (err, res) {
+    if (err) throw err;
+    console.table(res);
+    setTimeout(function () {
+      init();
+    }, 1000);
+  });
 }
 
 async function addNewEmployee() {
@@ -278,7 +298,6 @@ async function updateEmployeeRole() {
 
 async function updateEmployeeManager() {
   const employeeList = await getEmployeeData();
-
   const results = await inquirer.prompt([
     {
       name: "employee_name",
@@ -306,6 +325,112 @@ async function updateEmployeeManager() {
   );
 }
 
+async function addDepartment() {
+  const results = await inquirer.prompt([
+    {
+      name: "department_name",
+      type: "input",
+      message: "Please enter a new department.",
+    },
+  ]);
+  connection.query(
+    "INSERT INTO department (name) VALUES (?)",
+    [results.department_name],
+    function (err, res) {
+      if (err) throw err;
+      console.log(results.department_name, "has been added!");
+      setTimeout(function () {
+        init();
+      }, 1000);
+    }
+  );
+}
+
+function validateSalary(salary) {
+  var reg = /\d+(\.\d{1,2})?/;
+  return reg.test(salary) || "Please enter a valid salary (e.g. 100000.00)!";
+}
+
+async function addRole() {
+  const departmentList = await getDepartment();
+  const results = await inquirer.prompt([
+    {
+      name: "role_title",
+      type: "input",
+      message: "Please enter a new role.",
+    },
+    {
+      name: "salary",
+      type: "input",
+      message: "What's the salary for this role (e.g. 100000.00)?",
+      validate: validateSalary,
+    },
+    {
+      name: "department",
+      type: "list",
+      message: "Please select a department for this new role.",
+      choices: departmentList,
+    },
+  ]);
+  connection.query(
+    "INSERT INTO role (title, salary, department_id) VALUES (?, ?, ?)",
+    [results.role_title, results.salary, results.department],
+    function (err, res) {
+      if (err) throw err;
+      console.log(results.role_title, "has been added to the role table!");
+      setTimeout(function () {
+        init();
+      }, 1000);
+    }
+  );
+}
+
+async function deleteDepartment() {
+  const departmentList = await getDepartment();
+  const results = await inquirer.prompt([
+    {
+      name: "department_name",
+      type: "list",
+      message: "Which department do you want to remove?",
+      choices: departmentList.map(({ name }) => name),
+    },
+  ]);
+  connection.query(
+    "DELETE from department where name=?",
+    [results.department_name],
+    function (err, res) {
+      if (err) throw err;
+      console.log(results.department_name, "has been deleted!");
+      setTimeout(function () {
+        init();
+      }, 1000);
+    }
+  );
+}
+
+async function deleteRole() {
+  const roleList = await getRole();
+  const results = await inquirer.prompt([
+    {
+      name: "role_title",
+      type: "list",
+      message: "Which role do you want to remove?",
+      choices: roleList.map(({ name }) => name),
+    },
+  ]);
+  connection.query(
+    "DELETE from role where title=?",
+    [results.role_title],
+    function (err, res) {
+      if (err) throw err;
+      console.log(results.role_title, "has been deleted!");
+      setTimeout(function () {
+        init();
+      }, 1000);
+    }
+  );
+}
+
 const questions = [
   {
     name: "selections",
@@ -315,10 +440,17 @@ const questions = [
       "View All Employees",
       "View All Employees By Department",
       "View All Employees By Manager",
+      "View Departments",
+      "View Roles",
       "Add Employee",
       "Remove Employee",
+      "Add Department",
+      "Add Role",
+      "Delete Department",
+      "Delete Role",
       "Update Employee Role",
       "Update Employee Manager",
+      "Exit",
     ],
   },
 ];
@@ -332,20 +464,48 @@ const questions = [
 async function init() {
   try {
     const { selections } = await promptUser(questions);
-    if (selections == "View All Employees") {
-      viewAllEmployees();
-    } else if (selections == "View All Employees By Department") {
-      viewAllEmployeesByDepartment();
-    } else if (selections == "View All Employees By Manager") {
-      viewAllEmployeesByManager();
-    } else if (selections == "Add Employee") {
-      addNewEmployee();
-    } else if (selections == "Remove Employee") {
-      deleteEmployee();
-    } else if (selections == "Update Employee Role") {
-      updateEmployeeRole();
-    } else if (selections == "Update Employee Manager") {
-      updateEmployeeManager();
+    switch (selections) {
+      case "View All Employees":
+        viewAllEmployees();
+        break;
+      case "View All Employees By Department":
+        viewAllEmployeesByDepartment();
+        break;
+      case "View All Employees By Manager":
+        viewAllEmployeesByManager();
+        break;
+      case "View Departments":
+        viewDepartments();
+        break;
+      case "View Roles":
+        viewRoles();
+        break;
+      case "Add Employee":
+        addNewEmployee();
+        break;
+      case "Remove Employee":
+        deleteEmployee();
+        break;
+      case "Update Employee Role":
+        updateEmployeeRole();
+        break;
+      case "Update Employee Manager":
+        updateEmployeeManager();
+        break;
+      case "Add Department":
+        addDepartment();
+        break;
+      case "Add Role":
+        addRole();
+        break;
+      case "Delete Department":
+        deleteDepartment();
+        break;
+      case "Delete Role":
+        deleteRole();
+        break;
+      default:
+        process.exit();
     }
   } catch (err) {
     console.log(err);

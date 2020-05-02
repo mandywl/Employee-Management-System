@@ -1,5 +1,6 @@
 var mysql = require("mysql");
 var inquirer = require("inquirer");
+var figlet = require("figlet");
 const cTable = require("console.table");
 //const queryAsync = util.promisify(connection.query).bind(connection);
 
@@ -21,22 +22,25 @@ var connection = mysql.createConnection({
 // connect to the mysql server and sql database
 connection.connect(function (err) {
   if (err) throw err;
+  printASCII();
   console.log("connected as id " + connection.threadId + "\n");
-  // run the start function after the connection is made to prompt the user
-  init();
+  // run the init function after the connection is made to prompt the user
+  setTimeout(function () {
+    init();
+  }, 1000);
   //test();
 });
 
-const test = async () => {
-  const {
-    first_name,
-    last_name,
-    employee_role,
-    employee_manager,
-  } = await promptAddingEmployee(newEmployee);
-  console.log(employee_role);
-};
-
+function printASCII() {
+  figlet("Employee Manager", function (err, data) {
+    if (err) {
+      console.log("Something went wrong...");
+      console.dir(err);
+      return;
+    }
+    console.log(data);
+  });
+}
 // function which prompts the user for what action they should take
 function promptUser(questions) {
   return inquirer.prompt(questions);
@@ -255,7 +259,6 @@ async function addNewEmployee() {
       console.log(
         "Added",
         results.first_name,
-        " ",
         results.last_name,
         "to the database"
       );

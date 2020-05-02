@@ -2,7 +2,7 @@ var mysql = require("mysql");
 var inquirer = require("inquirer");
 var figlet = require("figlet");
 const cTable = require("console.table");
-//const queryAsync = util.promisify(connection.query).bind(connection);
+const util = require("util");
 
 // create the connection information for the sql database
 var connection = mysql.createConnection({
@@ -65,39 +65,66 @@ function getEmployeeData() {
   });
 }
 
-function getManager() {
-  return new Promise(function (resolve, reject) {
-    const managerList = [];
-    connection.query(
-      "SELECT DISTINCT emp.manager_id, CONCAT(mgr.first_name,' ',mgr.last_name) as manager FROM employee as emp left outer join employee as mgr on emp.manager_id=mgr.id where CONCAT(mgr.first_name,' ',mgr.last_name) is not null;",
-      function (err, res) {
-        if (err) throw err;
-        res.forEach((element) => {
-          managerList.push({
-            name: element.manager,
-            value: element.manager_id,
-          });
-        });
-        resolve(managerList);
-      }
-    );
+// function getManager() {
+//   return new Promise(function (resolve, reject) {
+//     const managerList = [];
+//     connection.query(
+//       "SELECT DISTINCT emp.manager_id, CONCAT(mgr.first_name,' ',mgr.last_name) as manager FROM employee as emp left outer join employee as mgr on emp.manager_id=mgr.id where CONCAT(mgr.first_name,' ',mgr.last_name) is not null;",
+//       function (err, res) {
+//         if (err) throw err;
+//         res.forEach((element) => {
+//           managerList.push({
+//             name: element.manager,
+//             value: element.manager_id,
+//           });
+//         });
+//         resolve(managerList);
+//       }
+//     );
+//   });
+// }
+
+function getManager(cb) {
+  var queryString =
+    "SELECT DISTINCT emp.manager_id, CONCAT(mgr.first_name,' ',mgr.last_name) as manager FROM employee as emp left outer join employee as mgr on emp.manager_id=mgr.id where CONCAT(mgr.first_name,' ',mgr.last_name) is not null";
+  connection.query(queryString, function (err, res) {
+    if (err) throw err;
+    cb(res);
   });
 }
 
+// function getRole() {
+//   return new Promise(function (resolve, reject) {
+//     const roleList = [];
+//     connection.query("SELECT * FROM role", function (err, res) {
+//       if (err) throw err;
+//       res.forEach((role) => {
+//         roleList.push({
+//           value: role.id,
+//           name: role.title,
+//         });
+//       });
+//       resolve(roleList);
+//     });
+//   });
+// }
+
 function getRole() {
-  return new Promise(function (resolve, reject) {
-    const roleList = [];
-    connection.query("SELECT * FROM role", function (err, res) {
-      if (err) throw err;
-      res.forEach((role) => {
-        roleList.push({
-          value: role.id,
-          name: role.title,
-        });
-      });
-      resolve(roleList);
+  const queryAsync = util.promisify(connection.query).bind(connection);
+  var queryString = "SELECT * FROM role";
+  return queryAsync(queryString);
+}
+
+async function mapRoleData() {
+  const roleData = await getRole();
+  const roleList = [];
+  roleData.forEach((role) => {
+    roleList.push({
+      value: role.id,
+      name: role.title,
     });
   });
+  return roleList;
 }
 
 function getDepartment() {
@@ -175,27 +202,35 @@ async function viewAllEmployeesByDepartment() {
   );
 }
 
-async function viewAllEmployeesByManager() {
-  const managerList = await getManager();
-  const results = await inquirer.prompt([
-    {
-      name: "manager_name",
-      type: "list",
-      message: "Please select a manager?",
-      choices: managerList.map(({ name }) => name),
-    },
-  ]);
-  connection.query(
-    "SELECT emp.id, emp.first_name, emp.last_name, role.title, department.name as department, role.salary, CONCAT(mgr.first_name,' ',mgr.last_name) as manager FROM employee as emp left outer join employee as mgr on emp.manager_id=mgr.id left join role on emp.role_id=role.id left join department on role.department_id=department.id where CONCAT(mgr.first_name,' ',mgr.last_name)=?",
-    [results.manager_name],
-    function (err, res) {
-      if (err) throw err;
-      console.table(res);
-      setTimeout(function () {
-        init();
-      }, 1000);
-    }
-  );
+function viewAllEmployeesByManager() {
+  const managerList = [];
+  getManager(async function (res) {
+    res.forEach((element) => {
+      managerList.push({
+        name: element.manager,
+        value: element.manager_id,
+      });
+    });
+    const results = await inquirer.prompt([
+      {
+        name: "manager_name",
+        type: "list",
+        message: "Please select a manager?",
+        choices: managerList.map(({ name }) => name),
+      },
+    ]);
+    connection.query(
+      "SELECT emp.id, emp.first_name, emp.last_name, role.title, department.name as department, role.salary, CONCAT(mgr.first_name,' ',mgr.last_name) as manager FROM employee as emp left outer join employee as mgr on emp.manager_id=mgr.id left join role on emp.role_id=role.id left join department on role.department_id=department.id where CONCAT(mgr.first_name,' ',mgr.last_name)=?",
+      [results.manager_name],
+      function (err, res) {
+        if (err) throw err;
+        console.table(res);
+        setTimeout(function () {
+          init();
+        }, 1000);
+      }
+    );
+  });
 }
 
 async function viewDepartments() {
@@ -220,8 +255,8 @@ async function viewRoles() {
 
 async function addNewEmployee() {
   const employeeList = await getEmployeeData();
-  const roleList = await getRole();
-  //console.log(employeeList);
+  const roleList = await mapRoleData();
+  console.log(roleList);
   const results = await inquirer.prompt([
     {
       name: "first_name",
@@ -271,7 +306,7 @@ async function addNewEmployee() {
 
 async function updateEmployeeRole() {
   const employeeList = await getEmployeeData();
-  const roleList = await getRole();
+  const roleList = await mapRoleData();
   const results = await inquirer.prompt([
     {
       name: "employee_name",
@@ -412,7 +447,7 @@ async function deleteDepartment() {
 }
 
 async function deleteRole() {
-  const roleList = await getRole();
+  const roleList = await mapRoleData();
   const results = await inquirer.prompt([
     {
       name: "role_title",
